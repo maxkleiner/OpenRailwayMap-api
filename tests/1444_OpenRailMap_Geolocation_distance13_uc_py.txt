@@ -1,0 +1,532 @@
+unit Geolocation_Distance_mX5_uc_12_py_OpenRailMap;
+
+{Template Script for Tutorial 142 for May 2025  V1.2
+ Template Script for Tutorial 160 for November 2025  V1.1
+   This program may be used or modified for any non-commercial purpose
+ so long as this original notice remains in place.
+   All other rights are reserved   🎶🎵🎵🎶 ♁♁♁
+ }
+
+interface
+
+const
+  SUSERAgent = 'Mozilla/5.001 (windows; U; NT4.0; en-US; rv:1.0) Gecko/25250101';
+  USERAGENT5 = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'+
+                   ' Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0 '; 
+  USERAGENT2 = 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1';  
+  USERAGENT3 = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'+
+                   ' Chrome/125.0.0.0 Safari/537.3'; // chrome + win   
+  USERAGENT4 = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'+
+                   ' (KHTML, like Gecko) Version/17.4.1 Safari/605.1.1';           // safari + mac
+  USERAGENT1 = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '+    // edge + win
+                   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.';   
+
+
+implementation
+
+//{$R *.DFM}
+//uses math;
+
+type
+ TipGeolocation = record
+     Latitude: Double; //read Coordinates[0] write SetLatitude;
+     Longitude: Double; //read Coordinates[1] write SetLongitude;
+  end;
+ 
+var tipgeoloc1, tipgeoloc2: TipGeolocation;
+  
+const
+    EARTHS_RADIUS_IN_METERS = 6378137;  
+var 
+    lat1,lon1,lat2,lon2:extended;  
+  
+ 
+function TipGeolocationDistanceInMetersTo(
+                     const AGeolocation: TipGeolocation;
+                           Latitude, Longitude: Double): Double;
+var LDeltaLat, LDeltaLong, LA: Double;
+begin
+  LDeltaLat:= DegToRad(AGeolocation.Latitude - Latitude);
+  LDeltaLong:= DegToRad(AGeolocation.Longitude - Longitude);
+  LA:= Sin(LDeltaLat / 2) * Sin(LDeltaLat / 2) + Cos(DegToRad(Latitude)) * 
+       Cos(DegToRad(AGeolocation.Latitude)) * Sin(LDeltaLong / 2) * Sin(LDeltaLong / 2);
+  Result:= Abs(EARTHS_RADIUS_IN_METERS * 2 * ArcTan2(Sqrt(LA), Sqrt(1 - LA)));
+end;
+
+const URL_GEOLOCURL9 = 'https://nominatim.openstreetmap.org/search?format=json&q=%s';
+      URL_APILAY_GEO = 'https://api.apilayer.com/geo/country/capital/%s';  
+      URL_ORM_LAYER  = 'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png';
+      URL_ORM_TEST   = 'https://api.openrailwaymap.org/v2/milestone?ref=4201&position=18.4';
+      //URL_ORM_TEST https://api.openrailwaymap.org/v2/facility?name=Karlsruhe&limit=1
+      URL_ORM_GET9    = 'https://api.openrailwaymap.org/v2/facility?name=%s&limit=1';
+      
+      
+var fromgeo, togeo: Tlatlong;      
+ 
+function API_GEOLocation_OSM9(AURL, aloc, aApikey: string;
+                                             verbose: boolean): Tlatlong;
+var Httpreq: THttpRequestC; httpres: string;
+    jsn: TMcJsonItem;
+begin
+  httpreq:= THttpRequestC.create(self);
+  httpreq.headers.add('Accept: application/json; charset=utf-8');
+  //httpreq.headers.add('X-Api-Key:'+aAPIkey);
+  httpreq.useragent:= USERAGENT5;
+  httpreq.SecurityOptions:= [soSsl3, soPct, soIgnoreCertCNInvalid];
+  try
+    if httpreq.get(Format(AURL,[aloc])) then begin
+       httpres:= (httpreq.Response.ContentAsUTF8String)
+       writeln('conttype '+httpreq.Response.ContentType);
+       if verbose then writ('debug back '+formatJson(httpres));
+       jsn:= TMcJsonItem.Create;
+       jsn.AsJSON:= httpres;
+       writ('debug name: '+jsn.at(0,'name').asstring)
+       result.lat:= jsn.at(0,'lat').asnumber;
+       result.long:= jsn.at(0,'lon').asnumber;
+       result.descript:= Format('Coords: lat %2.5f lng %2.5f %s osm_id: %s ',
+                                [result.lat,result.long,jsn.at(0,'name').asstring,
+                                                        jsn.at(0,'osm_id').asstring]); 
+       result.descript:= _ReplaceStr(result.descript,'???',jsn.at(0,'name').asstring);                                           
+    end else Writeln('APIError '+inttostr(Httpreq.Response.StatusCode2));
+  except 
+    writeln('EWI_APIHTTP: '+ExceptiontoString(exceptiontype,exceptionparam));  
+  finally 
+    writeln('Status3: '+gethttpcod(httpreq.Response.statuscode2))
+    httpreq.Free;  
+    sleep(200);
+    jsn.Free;
+  end; 
+end;
+
+function API_GEOLocation_ORM9(AURL, aloc, aApikey: string;
+                                             verbose: boolean): Tlatlong;
+var Httpreq: THttpRequestC; httpres: string; jsn: TMcJsonItem;
+begin
+  httpreq:= THttpRequestC.create(self);
+  httpreq.headers.add('Accept: application/json; charset=utf-8');
+  //httpreq.headers.add('X-Api-Key:'+aAPIkey);
+  httpreq.useragent:= USERAGENT5;
+  httpreq.SecurityOptions:= [soSsl3,soPct,soIgnoreCertCNInvalid];
+  try
+    if httpreq.get(Format(AURL,[aloc])) then begin
+       httpres:= (httpreq.Response.ContentAsUTF8String)
+       writeln('conttype '+httpreq.Response.ContentType);
+       if verbose then writ('debug back '+formatJson(httpres));
+       jsn:= TMcJsonItem.Create;
+       jsn.AsJSON:= httpres;
+       writ('debug name: '+jsn.at(0,'name').asstring)
+       writ('debug operator: '+jsn.at(0,'operator').asstring)
+       result.lat:= jsn.at(0,'longitude').asnumber;  //in the api reversed back
+       result.long:= jsn.at(0,'latitude').asnumber;
+       result.descript:= Format('Coords: lat %2.5f lng %2.5f %s osm_id: %s operator: %s',
+                                [result.lat,result.long,jsn.at(0,'name').asstring,
+                                                        jsn.at(0,'osm_id').asstring,
+                                                        jsn.at(0,'operator').asstring]); 
+       //result.descript:= _ReplaceStr(result.descript,'???',jsn.at(0,'name').asstring); 
+       //result.descript:= _ReplaceStr(result.descript,'???',jsn.at(0,'operator').asstring);                                             
+    end else Writeln('APIError '+inttostr(Httpreq.Response.StatusCode2));
+  except 
+    writeln('EWI_APIHTTP: '+ExceptiontoString(exceptiontype,exceptionparam));  
+  finally 
+    writeln('Status3: '+gethttpcod(httpreq.Response.statuscode2))
+    httpreq.Free;  
+    sleep(200);
+    jsn.Free;
+  end; 
+end;
+
+(*
+{$I .\NINJAAPIKEY.INC}
+
+const
+   N_APIKEY = NINJA_APIKEY;
+   L_APIKEY = LAYER_APIKEY;
+
+function TAddressGeoCodeOSM8(AURL, location, aApikey: string): tlatlong;
+var Httpreq: THttpRequestC; httpres: string;
+    jsn: TMcJsonItem;
+begin
+  httpreq:= THttpRequestC.create(self);
+  httpreq.headers.add('Accept: application/json; charset=utf-8');
+  httpreq.headers.add('apikey:'+aAPIkey);
+  httpreq.useragent:= USERAGENT4;
+  httpreq.SecurityOptions:= [soSsl3, soPct, soIgnoreCertCNInvalid];
+  try
+    if httpreq.get(Format(AURL,[location])) then begin
+       httpres:= (httpreq.Response.ContentAsUTF8String)
+       //writeln('conttype '+httpreq.Response.ContentType);
+       writ('debug back '+formatJson(httpres));
+       jsn:= TMcJsonItem.Create;
+       jsn.AsJSON:= httpres;
+       result.lat:= jsn.at(0,'latitude').asnumber;
+       result.long:= jsn.at(0,'longitude').asnumber;
+       result.descript:= Format('Coords: lat %2.5f  lng %2.5f %s place_id: %d',
+                                [result.lat,result.long,jsn.at(0,'native_name').asstring,
+                                                        jsn.at(0,'numeric_code').asinteger]); 
+    end else Writeln('APIError '+inttostr(Httpreq.Response.StatusCode2));
+    //StrReplace(httpres, '[{', '{');
+  except  
+    writeln('EWI_HTTP: '+ExceptiontoString(exceptiontype,exceptionparam));  
+  finally  
+    writeln('Status3: '+gethttpcod(httpreq.Response.statuscode2))
+    httpreq.Free;  
+    sleep(200)
+    jsn.Free;
+  end; 
+end;  *)
+
+var start,stop,freq:int64; loops:integer;  ans:extended;
+
+procedure starttime;
+begin
+  queryperformancecounter(start);
+end;
+
+procedure stoptime(msg:string);         
+begin
+  queryperformancecounter(stop);
+  queryperformancefrequency(freq);
+  writeln('Time for'+format('%4.0g',[0.0+loops])+' calculation  of '
+            +#13+' Answer is '
+            +#13+' used '+msg +' is '+format('%8.6n seconds',[(stop-start)/freq])
+           );
+end;
+
+procedure Geoloc_setup;
+begin
+  lat1:= 46.94724; lon1:= 7.45158;
+  lat2:= 53.3807;  lon2:= -1.4702;
+  loops:= 1; ans:= 1;
+  tipgeoloc1.latitude:= lat1; tipgeoloc1.longitude:= lon1;
+  tipgeoloc2.latitude:= lat2; tipgeoloc2.longitude:= lon2;
+  starttime;
+end;
+
+
+//However, it would be much simpler to just return a UTF8String instead and let the 
+//RTL handle the UTF-8 for you, eg:
+function TForm1EncodeAsUTF8(UnicodeStr: string): UTF8String;
+begin
+  Result:= UnicodeStr;
+end;
+
+function TForm1EncodeAsUTF8_(UnicodeStr: string): AnsiString;
+var UTF8Str: UTF8String;
+    i: Integer;
+begin
+  UTF8Str:= UTF8String(UnicodeStr);
+  SetLength(Result, Length(UTF8Str));
+  for i:= 1 to Length(UTF8Str) do
+    Result:= result+inttoascii(Ord(UTF8Str[i]),2); 
+end;
+
+const PYFUNC_HAVERSINE =
+'def haversine_distance(lat1, lon1, lat2, lon2):                  '+LF+
+'    # Radius of the Earth in kilometers                          '+LF+
+'    R = 6371.0                                                   '+LF+
+'    # Convert latitude and longitude from degrees to radians     '+LF+
+'    lat1_rad = math.radians(lat1)                                '+LF+
+'    lon1_rad = math.radians(lon1)                                '+LF+
+'    lat2_rad = math.radians(lat2)                                '+LF+
+'    lon2_rad = math.radians(lon2)                                '+LF+
+'                                                                 '+LF+
+'    # Differences in coordinates                                 '+LF+
+'    dlat = lat2_rad - lat1_rad                                   '+LF+
+'    dlon = lon2_rad - lon1_rad                                   '+LF+
+'                                                                 '+LF+
+'    # Haversine formula                                          '+LF+
+'    a = math.sin(dlat/2)**2+math.cos(lat1_rad)*math.cos(lat2_rad)*math.sin(dlon/2)**2'+LF+                                                
+'    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))           '+LF+
+'                                                                 '+LF+
+'    # Distance in kilometers                                     '+LF+
+'    distance = R * c                                             '+LF+
+'    return distance                                              ';  
+
+procedure Geocodedistance_PySolution(loc: string);
+var OWMKEYS: string;
+begin
+ with TPythonEngine.Create(Nil) do begin
+   //pythonhome:= PYHOME64;
+   loaddll;
+   autofinalize:= false;
+   try
+      Execstring('import re, math');
+    // Execstring('import plotly.express as px');
+      Execstring(PYFUNC_HAVERSINE);
+   
+    // 7. Enumerate Function  
+     //Execstr('Sphere = collections.namedtuple("Sphere", "cx cy cz r")');   
+     //Execstr('V3 = collections.namedtuple("V3", "x y z")'); 
+      
+     Execstr('import io, sys');               
+     execstr('output = io.StringIO()') 
+     execstr('sys.stdout = output')  
+     //execstr('V3 = {-50, 30, 50}') 
+     //execstr('light = normalize(-50, 30, 50, V3)'); 
+     execstr('lat1 = 46.94809   # Latitude of Bern    '+LF+
+              'lon1 = 7.44744   # Longitude of Bern   '+LF+
+              //'lat2 = 48.8566   # Latitude of Paris   '+LF+
+              //'lon2 = 2.3522    # Longitude of Paris'  );
+              'lat2 = 36.56163   # Latitude of Kanazawa  '+LF+
+              'lon2 = 136.65688    # Longitude of Kanazawa'  );
+  
+     execstr('distance = haversine_distance(lat1, lon1, lat2, lon2)');
+     execstr('print(f"The distance between Bern and '+loc+' is {distance:.2f} kilometers.")');
+     println(evalstr('sys.version'));  
+     //println('tuples '+evalstr('V3.z'));  
+     //println('tuples '+evalstr('light.x')); //test fstring:
+     //execstr('print(f"\n\nSum of {a} and {b} is {a + b}.")');
+     println(evalstr('(output.getvalue().strip())'));                   
+   except
+      raiseError;
+   finally
+      UnloadDll;
+      Free;
+   end;
+ end; 
+end; 
+
+
+begin //@main
+
+  Geoloc_setup;    //reference data1
+  maxform1.setconsole;
+  SphericalEarthDistance(lat1,lon1,lat2,lon2,1)
+  writeln('Distance Bern,CH - Sheffield,E: '+
+                 format('%2.4f km ',[SphericalEarthDistance(lat1,lon1,lat2,lon2,1)]));
+  stoptime('Compiled- GeoCode Distance method');
+  Geoloc_setup;    //reference data2
+  writeln('Distance Bern,CH - Sheffield,E: '+
+                 format('%2.4f m ',[TipGeolocationDistanceInMetersTo(tipgeoloc1,
+                                                                     lat2, lon2)]));
+  stoptime('Scripted- GeoCode Distance method');
+
+  //https://www.openstreetmap.org/node/279803191
+ { fromgeo:=  API_GEOLocation_OSM9(URL_GEOLOCURL9,
+                         //'Cathedral, Bern, CH','L_APIKEY', false);
+                          'Hauptbahnhof,Bern, CH','L_APIKEY', true);
+        }                  
+  sleep(500);
+  //togeo:= API_GEOLocation_OSM9(URL_GEOLOCURL9,
+    //                     'Gare du Nord, Paris, France','L_APIKEY', false);
+  //togeo:= API_GEOLocation_OSM9(GEOLOCURL9, 'Athen', 'L_APIKEY', false);
+  //togeo:= API_GEOLocation_OSM9(URL_GEOLOCURL9, 'Cafe Paris, Cologne','',true);
+  //t_latlong:= API_GEOLocation_OSM9(GEOLOCURL9,'Gare du Nord, Paris, France','L_APIKEY');
+  //togeo:= API_GEOLocation_OSM9(URL_GEOLOCURL9, 'Lindwurm, Klagenfurt, Austria','',true);
+  //togeo:= API_GEOLocation_OSM9(URL_GEOLOCURL9, 'Gare de Est, Paris, France','',true);
+ (* togeo:= API_GEOLocation_OSM9(URL_GEOLOCURL9, 'Kanazawa, Japan','',true);
+  writ(jsonunescape((fromgeo.descript),#13#10)); 
+  writ(jsonunescape((togeo.descript),#13#10));  
+  writeln('Distance between A and B: '+format('%2.4f km ',
+           [SphericalEarthDistance(fromgeo.lat,fromgeo.long, togeo.lat,togeo.long,1)]));  *)
+   writ('Open Railway Map:__________________________________________')        
+   togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Kanazawa','',true);
+  // togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Karlsruhe','',true); 
+  //togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Bern','',true); 
+ 
+  writ(jsonunescape((togeo.descript),#13#10));  
+          
+  //Geocodedistance_PySolution('Paris');   
+  //  Geocodedistance_PySolution('Kanazawa, Japan');         
+  //OpenWeb('https://www.latlong.net/c/?lat='+flots(t_latlong.lat)+'&long='+flots(t_latlong.long));
+  OpenWeb('https://www.latlong.net/c/?lat='+flots(togeo.lat)+'&long='+flots(togeo.long));
+  //writ(list_modules(exepath+'maxbox52.exe'));
+ end.
+End.
+
+doc: ⚠️ ∞  
+
+https://wiki.openstreetmap.org/wiki/OpenRailwayMap/API
+https://github.com/OpenRailwayMap/OpenRailwayMap-api/blob/master/README.md#api
+
+This is a reimplementation of the OpenRailwayMap API in Python with performance as main development goal. 
+Its public REST API is not exactly the same as the old PHP implementation but it should do the job good 
+enough it serves to the website www.openrailwaymap.org.
+
+OpenRailwayMap Database Overview  1 2
+The OpenRailwayMap is an OpenStreetMap-based project designed to create a detailed 
+map of the world's railway infrastructure. It provides a variety of tools, APIs, and map 
+styles to visualize railway data, including tracks, stations, signals, and speed limits.
+
+Key Features and Usage
+
+The OpenRailwayMap database is built on OpenStreetMap data and is available under 
+the Open Database License (ODbL). The rendered map tiles are distributed under the CC-BY-SA 2.0 license. 
+The project is non-commercial and maintained by volunteers, relying on donations for its operation.
+
+The database supports querying railway-related information through a RESTful API. 
+This API allows users to search for stations by name or reference code and retrieve 
+mileage data for specific railway lines. The API documentation is hosted on GitHub.
+
+Map Styles and Tile Access
+The map tiles are rendered in Web Mercator projection and are available in different styles, such as:
+
+∞
+{\displaystyle \infty }
+ref: http://www.delphiforfun.org.ws034.alentus.com/programs/Delphi_Techniques/timing.htm
+http://www.delphiforfun.org.ws034.alentus.com/programs/Math_Topics/Rectangle%20Counts.htm
+https://nominatim.org/
+https://my6.code.blog/2025/04/22/paris-2025/
+https://de.scribd.com/document/852985000/Maxbox-Starter142-Geocoding-Distance
+https://softwareschule.code.blog/2025/04/23/geocoding-distance%f0%9f%90%9e/
+https://dev.to/max_kleiner_9d12e786b3ecc/geocoding-distance-115b
+
+https://dev.to/breitsch_breitsch_a34d774/time-space-matrix-i4f
+ref:
+debug name: \u91d1\u6ca2
+Status3: SC_OK
+Coords: lat 136.64802 lng 36.57805 金沢 osm_id: 3977645705 
+ mX5🐞 executed: 30/10/2025 14:11:44  Runtime: 0:0:3.524  Memload: 76% use
+
+Status3: SC_OK
+Coords: lat 46.94724 lng 7.45158 Münster osm_id: 7996249 
+Coords: lat 48.87710 lng 2.35949 Paris Gare de l'Est osm_id: 2506241285 
+Distance: 435.8295 km 
+ mX5🐞 executed: 22/04/2025 18:53:46  Runtime: 0:0:3.157  Memload: 70% use
+
+fact": "The abbreviation Xmas for the word Christmas is of Greek origin. 
+Since the word for Christ in the Greek language is Xristos, which starts with 
+the letter \"X,\" they started putting the X in place of Christ and came up 
+with the short form for the word Christmas"}]  True
+
+doc: Exception: Control 'TMemo($0000022742EB0160)' has no parent window. Path:
+maxform1
+  .TForm($000002274C7117D0)
+  .TMemo($0000022742EB0160) at 850.5226
+RemObjects Pascal Script. Copyright (c) 2004-2024 by RemObjects Software & maXbox5
+
+EWI_HTTP: Exception: The request has timed out.   ⚠️
+Status3: 
+Null Pointer Exception at 929.1876
+Solution: USERAGENT4;
+
+   {
+  "error_message": "You must enable Billing on the Google Cloud Project at 
+  https://console.cloud.google.com/project/_/billing/enable Learn more at 
+  https://developers.google.com/maps/gmp-get-started",
+  "results": [ ],
+  "status": "REQUEST_DENIED"
+}
+{
+  "error_message": "This API project is not authorized to use this API.",
+  "results": [ ],
+  "status": "REQUEST_DENIED"
+}
+
+EWI_APIHTTP: Exception: Can't convert item "number" with value "5230752679" to "integer"
+Status3: SC_OK
+Exception: Access violation at address 0000000001836C9C in module 'maXbox5.exe'. Read of address 0000000000000000 at 958.764
+APIError 403
+Status3: SC_FORBIDDEN
+Status3: SC_FORBIDDEN
+Exception: Invalid pointer operation at 875.1746
+
+You are not following the Nominatim Usage policy, 
+see here: https://operations.osmfoundation.org/policies/nominatim/
+
+You'll have to be esp. careful about including a unique user agent for your application ;)
+
+It sounds like you're encountering a "403 Forbidden" error when trying to use the Nominatim API. 
+This error typically indicates that your request is being blocked, possibly due to rate limiting, 
+incorrect usage, or IP blocking. Here are a few steps you can take to troubleshoot and resolve this issue:
+
+Check API Usage Limits: Ensure that you are not exceeding the usage limits set by Nominatim. 
+They have strict policies to prevent abuse. Review their usage policy to make sure you're compliant.
+
+User-Agent Header: Nominatim requires a valid User-Agent header in your requests. Make sure you include a descriptive User-Agent string that identifies your application. 
+fact": "The abbreviation Xmas for the word Christmas is of Greek origin. 
+Since the word for Christ in the Greek language is Xristos, which starts with the letter 
+\"X,\" they started putting the X in place of Christ and came up with the short form for 
+the word Christmas"}]  True
+
+Common Charsets____________________________________________________
+DEFAULT_CHARSET: Default character set.
+ANSI_CHARSET: ANSI character set.
+OEM_CHARSET: Original Equipment Manufacturer character set.
+SYMBOL_CHARSET: Symbol character set.
+UNICODE_CHARSET: Unicode character set.
+
+Zusammenhang zwischen F-lydisch und G-Dur
+F-lydisch und G-Dur stehen in einem engen modalen und tonalen Zusammenhang, 
+der sich aus dem Aufbau der Kirchentonleitern (Modi) und ihrer Beziehung zu den Durtonleitern ergibt.
+F-lydisch als Modus von C-Dur
+Die F-lydische Tonleiter besteht aus den Tönen: F, G, A, H, C, D, E, F.
+
+Sie ist ein Modus der C-Dur-Tonleiter, das heißt, sie verwendet exakt die gleichen Töne wie C-Dur, 
+beginnt aber auf F statt auf C.
+Der lydische Modus ist der vierte Modus einer Dur-Tonleiter. F-lydisch ist somit die vierte Stufe von C-Dur.
+G-Dur und seine Beziehung zu F-lydisch
+Die G-Dur-Tonleiter besteht aus den Tönen: G, A, H, C, D, E, Fis, G.
+
+Im Vergleich zu F-lydisch unterscheiden sich die beiden Tonleitern 
+nur in einem Ton: F-lydisch hat ein H (statt B) und ein F (statt Fis), während G-Dur ein Fis hat.
+Modale Beziehung: Gemeinsame Töne und Quintenzirkel
+F-lydisch und G-Dur sind im Quintenzirkel benachbart: F liegt eine Quarte unter C, G eine Quinte über C.
+Ein wichtiger Zusammenhang: Die F-lydische Tonleiter nutzt die gleichen Töne wie C-Dur 
+(keine Vorzeichen), G-Dur hingegen hat ein Kreuz (Fis).
+Der lydische Modus zeichnet sich dadurch aus, dass die Quarte übermäßig ist 
+(in F-lydisch: H statt B), was den Klang "offener" und "schwebender" macht als die normale Dur-Tonleiter.
+
+Harmonische Verbindung
+In der Stufentheorie bildet F-Dur die Subdominante in C-Dur, G-Dur die Dominante.
+F-lydisch kann als "F-Dur mit erhöhter Quarte" verstanden werden, wobei die Töne aus C-Dur stammen.
+G-Dur ist die Dominante von C-Dur und hat daher eine enge harmonische Beziehung 
+zu F-lydisch, da beide aus den gleichen Stammtönen (C-Dur) abgeleitet werden können, 
+aber unterschiedliche Funktionen und Klänge bieten.
+
+Zusammenfassung im Vergleich
+Merkmal   F-lydisch   G-Dur
+Töne   F, G, A, H, C, D, E, F   G, A, H, C, D, E, Fis, G
+Vorzeichen   keine (wie C-Dur)   1 Kreuz (Fis)
+Modale Herkunft   4. Modus von C-Dur   Ionisch (Dur)
+Charakteristik   Übermäßige Quarte (H statt B)   Reine Quarte (C)
+Funktion in C-Dur   Subdominant-Modus   Dominant-Tonart
+Fazit
+Der Zusammenhang zwischen F-lydisch und G-Dur liegt darin, dass beide eng mit 
+der C-Dur-Tonleiter verbunden sind: F-lydisch ist ein Modus von C-Dur, während G-Dur 
+als Dominante von C-Dur eine wichtige harmonische Rolle spielt. Beide Tonleitern teilen 
+viele gemeinsame Töne, unterscheiden sich aber durch die Verwendung von F 
+(in F-lydisch) bzw. Fis (in G-Dur) und durch ihre jeweilige tonale Funktion.
+
+Ähnlich Wie unterscheidet sich der lydische Modus von anderen Modus
+Welche Rolle spielt der lydische Modus in der Musiktheorie
+Gibt es bekannte Lieder, die im lydischen Modus geschrieben sind
+Wie beeinflusst der lydische Modus die Stimmung eines Stücks
+Welche anderen Modi sind ähnlich wie der lydische Modus
+
+Merkmal             F-lydisch                G-Dur
+Töne                F, G, A, H, C, D, E, F   G, A, H, C, D, E, Fis, G
+Vorzeichen          keine (wie C-Dur)        1 Kreuz (Fis)
+Modale Herkunft     4. Modus von C-Dur       Ionisch (Dur)
+Charakteristik      Übermäßige Quarte (H statt B)   Reine Quarte (C)
+Funktion in C-Dur   Subdominant-Modus        Dominant-Tonart
+
+Fazit
+Der Zusammenhang zwischen F-lydisch und G-Dur liegt darin, dass beide eng mit der 
+C-Dur-Tonleiter verbunden sind: F-lydisch ist ein Modus von C-Dur, während G-Dur 
+als Dominante von C-Dur eine wichtige harmonische Rolle spielt. Beide Tonleitern 
+teilen viele gemeinsame Töne, unterscheiden sich aber durch die Verwendung 
+von F (in F-lydisch) bzw. Fis (in G-Dur) und durch ihre jeweilige tonale Funktion.
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    # Radius of the Earth in kilometers
+    R = 6371.0
+    
+    # Convert latitude and longitude from degrees to radians
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+    
+    # Differences in coordinates
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    # Haversine formula
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) *
+                                                     math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    # Distance in kilometers
+    distance = R * c
+    return distance
