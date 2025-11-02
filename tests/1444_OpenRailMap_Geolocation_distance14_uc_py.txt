@@ -325,7 +325,8 @@ begin //@main
   writeln('Distance between A and B: '+format('%2.4f km ',
            [SphericalEarthDistance(fromgeo.lat,fromgeo.long, togeo.lat,togeo.long,1)]));  *)
    writ('Open Railway Map:________________________________________________')        
-   togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Kanazawa','',true);
+   //togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Kanazawa','',true);
+  togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Kamakura','',true); 
   // togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Karlsruhe','',true); 
   //togeo:= API_GEOLocation_ORM9(URL_ORM_GET9, 'Bern','',true); 
  
@@ -334,8 +335,11 @@ begin //@main
   //Geocodedistance_PySolution('Paris');   
   //  Geocodedistance_PySolution('Kanazawa, Japan');         
   //OpenWeb('https://www.latlong.net/c/?lat='+flots(t_latlong.lat)+'&long='+flots(t_latlong.long));
-  OpenWeb('https://www.latlong.net/c/?lat='+flots(togeo.lat)+'&long='+flots(togeo.long));
+  //OpenWeb('https://www.latlong.net/c/?lat='+flots(togeo.lat)+'&long='+flots(togeo.long));
   //writ(list_modules(exepath+'maxbox52.exe'));
+  OpenWeb('https://www.openrailwaymap.org/?style=standard&lang=en&lat='+
+                                     flots(togeo.lat)+'&lon='+flots(togeo.long)+'&zoom=14');
+  
  end.
 End.
 
@@ -345,6 +349,9 @@ https://wiki.openstreetmap.org/wiki/OpenRailwayMap/API
 https://github.com/OpenRailwayMap/OpenRailwayMap-api/blob/master/README.md#api
 https://www.sbbarchiv.ch/detail.aspx?ID=510627
 https://github.com/maxkleiner/OpenRailwayMap-api/tree/master/tests
+
+Kamakura
+https://www.openrailwaymap.org/?style=standard&lang=en&lat=35.319152192198985&lon=139.5503568649292&zoom=14
 
 This is a reimplementation of the OpenRailwayMap API in Python with performance as main development goal. 
 Its public REST API is not exactly the same as the old PHP implementation but it should do the job good 
